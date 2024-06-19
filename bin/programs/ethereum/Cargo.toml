@@ -1,0 +1,26 @@
+[package]
+version = "0.1.0"
+name = "ethereum-program"
+edition = "2021"
+
+[dependencies]
+sp1-zkvm = { git = "https://github.com/succinctlabs/sp1.git", rev = "v1.0.5-testnet"  }
+kona-common-proc = { path = "../../../crates/common-proc", version = "0.0.1" }
+kona-client = { path = "../client", version = "0.1.0" }
+kona-mpt = { path = "../../../crates/mpt", version = "0.0.1" }
+kona-zkvm = { path = "../../../crates/zkvm", version = "0.0.1" }
+kona-derive = { path = "../../../crates/derive", version = "0.0.1" }
+kona-executor = { path = "../../../crates/executor", version = "0.0.1" }
+kona-common = { path = "../../../crates/common", version = "0.0.1" }
+kona-preimage = { path = "../../../crates/preimage", version = "0.0.1" }
+alloy-consensus.workspace = true
+alloy-primitives.workspace = true
+alloy-rlp.workspace = true
+reth-evm-ethereum = { git = "https://github.com/paradigmxyz/reth" }
+reth-primitives = { git = "https://github.com/paradigmxyz/reth", default-features = false }
+reth-chainspec = { git = "https://github.com/paradigmxyz/reth", default-features = false }
+reth-revm = { git = "https://github.com/paradigmxyz/reth" }
+reth-evm = { git = "https://github.com/paradigmxyz/reth" }
+revm.workspace = true
+cfg-if.workspace = true
+anyhow.workspace = true

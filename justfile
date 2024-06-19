@@ -86,3 +86,12 @@ build-asterisc *args='':
     -v `pwd`/:/workdir \
     -w="/workdir" \
     ghcr.io/ethereum-optimism/kona/asterisc-builder:main cargo build --workspace --all -Zbuild-std $@ --exclude kona-host --exclude trusted-sync
+
+# Build for the `asterisc` target. Any crates that require the stdlib are excluded from the build for this target.
+build-asterisc *args='':
+  docker run \
+    --rm \
+    --platform linux/amd64 \
+    -v `pwd`/:/workdir \
+    -w="/workdir" \
+    ghcr.io/ethereum-optimism/kona/asterisc-builder:main cargo build --workspace --all -Zbuild-std $@ --exclude kona-host --exclude trusted-sync

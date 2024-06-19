@@ -13,3 +13,7 @@ cannon:
 # Build the `asterisc` program builder image
 asterisc:
 	docker build -t asterisc-pipeline:latest -f asterisc/asterisc.dockerfile ./asterisc
+
+# Build the `zkvm` program builder image
+zkvm:
+	docker build -t zkvm-pipeline:latest -f sp1/sp1.dockerfile ./sp1

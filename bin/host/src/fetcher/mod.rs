@@ -15,6 +15,7 @@ use kona_derive::{
     types::{BlockInfo, IndexedBlobHash},
 };
 use kona_preimage::{PreimageKey, PreimageKeyType};
+use reth_primitives::Block as RethBlock;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use tracing::trace;
@@ -91,6 +92,44 @@ where
         trace!(target: "fetcher", "Fetching hint: {hint_type} {hint_data}");
 
         match hint_type {
+            HintType::L1BlockWithRecoveredSenders => {
+                // Validate the hint data length.
+                if hint_data.len() != 8 {
+                    anyhow::bail!("Invalid hint data length: {}", hint_data.len());
+                }
+
+                // Fetch the block from the L1 chain provider and store the transactions within its
+                // body in the key-value store.
+                let block_number = u64::from_be_bytes(
+                    hint_data
+                        .as_ref()
+                        .try_into()
+                        .map_err(|e| anyhow!("Failed to convert bytes to u64: {e}"))?,
+                );
+                let input_hash = keccak256(hint_data.as_ref());
+
+                let alloy_block = self
+                    .l1_provider
+                    .get_block_by_number(block_number.into(), true)
+                    .await
+                    .map_err(|e| anyhow!("Failed to fetch block: {e}"))?
+                    .ok_or(anyhow!("Block not found."))?;
+
+                // let block = RethBlock::try_from(alloy_block)
+                //     .ok_or(anyhow!("Failed to convert alloy block to reth block."))?;
+                // let block_with_senders = block
+                //     .clone()
+                //     .with_recovered_senders()
+                //     .ok_or(anyhow!("Failed to recover senders."))?;
+
+                // let encoded_block_with_senders = block_with_senders.encode();
+                let block_bytes = vec![];
+                let mut kv_write_lock = self.kv_store.write().await;
+                kv_write_lock.set(
+                    PreimageKey::new(*input_hash, PreimageKeyType::Keccak256).into(),
+                    block_bytes.into(),
+                );
+            }
             HintType::L1BlockHeader => {
                 // Validate the hint data length.
                 if hint_data.len() != 32 {

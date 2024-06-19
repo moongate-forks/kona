@@ -47,3 +47,9 @@ inherits = "release"
 panic = "abort"
 codegen-units = 1
 lto = "fat"
+
+[patch.crates-io]
+revm = { git = "https://github.com/bluealloy/revm.git", rev = "41e2f7f" }
+revm-interpreter = { git = "https://github.com/bluealloy/revm.git", rev = "41e2f7f" }
+revm-precompile = { git = "https://github.com/bluealloy/revm.git", rev = "41e2f7f" }
+revm-primitives = { git = "https://github.com/bluealloy/revm.git", rev = "41e2f7f" }
