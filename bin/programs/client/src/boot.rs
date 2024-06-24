@@ -96,7 +96,7 @@ impl BootInfo {
 }
 
 /// Returns the rollup config for the given chain ID.
-fn rollup_config_from_chain_id(chain_id: u64) -> Result<RollupConfig> {
+pub fn rollup_config_from_chain_id(chain_id: u64) -> Result<RollupConfig> {
     match chain_id {
         10 => Ok(OP_MAINNET_CONFIG),
         _ => anyhow::bail!("Unsupported chain ID: {}", chain_id),

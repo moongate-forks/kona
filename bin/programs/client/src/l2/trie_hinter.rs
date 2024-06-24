@@ -14,6 +14,7 @@ use kona_preimage::HintWriterClient;
 #[derive(Debug)]
 pub struct TrieDBHintWriter;
 
+// TODO: Discuss if this should be generic over oracle as well. We don't need it because no op but I think it's better for others.
 impl TrieDBHinter for TrieDBHintWriter {
     fn hint_trie_node(&self, hash: B256) -> Result<()> {
         kona_common::block_on(async move {

@@ -1,7 +1,6 @@
 use kona_preimage::HintWriterClient;
 use async_trait::async_trait;
 use anyhow::Result;
-use alloc::boxed::Box;
 
 pub struct NoopHintWriter;
 

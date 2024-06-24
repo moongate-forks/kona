@@ -14,10 +14,10 @@ pub mod hint;
 pub use hint::HintType;
 
 mod comms;
-pub use comms::{CachingOracle, HINT_WRITER, ORACLE_READER};
+pub use comms::{CachingOracle, HINT_WRITER};
 
 mod boot;
 pub use boot::{
     BootInfo, L1_HEAD_KEY, L2_CHAIN_ID_KEY, L2_CLAIM_BLOCK_NUMBER_KEY, L2_CLAIM_KEY,
-    L2_OUTPUT_ROOT_KEY, L2_ROLLUP_CONFIG_KEY,
+    L2_OUTPUT_ROOT_KEY, L2_ROLLUP_CONFIG_KEY, rollup_config_from_chain_id,
 };

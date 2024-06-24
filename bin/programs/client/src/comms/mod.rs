@@ -15,7 +15,7 @@ static HINT_WRITER_PIPE: PipeHandle =
     PipeHandle::new(FileDescriptor::HintRead, FileDescriptor::HintWrite);
 
 /// The global preimage oracle reader.
-pub static ORACLE_READER: OracleReader = OracleReader::new(ORACLE_READER_PIPE);
+static ORACLE_READER: OracleReader = OracleReader::new(ORACLE_READER_PIPE);
 
 /// The global hint writer.
 pub static HINT_WRITER: HintWriter = HintWriter::new(HINT_WRITER_PIPE);
