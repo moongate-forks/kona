@@ -1,11 +1,18 @@
 //! This module contains all CLI-specific code for the host binary.
 
-use crate::kv::{
-    DiskKeyValueStore, LocalKeyValueStore, MemoryKeyValueStore, SharedKeyValueStore,
-    SplitKeyValueStore,
+use crate::{
+    fetcher::ThreadSafeFetcher,
+    kv::{
+        DiskKeyValueStore, LocalKeyValueStore, MemoryKeyValueStore, SharedKeyValueStore,
+        SplitKeyValueStore,
+    },
+    util, DefaultFetcher,
 };
 use alloy_primitives::B256;
+use anyhow::{anyhow, Result};
+use async_trait::async_trait;
 use clap::{ArgAction, Parser};
+use kona_derive::online::{OnlineBeaconClient, OnlineBlobProvider};
 use serde::Serialize;
 use std::{path::PathBuf, sync::Arc};
 use tokio::sync::RwLock;
@@ -15,6 +22,22 @@ pub(crate) use parser::parse_b256;
 
 mod tracing_util;
 pub use tracing_util::init_tracing_subscriber;
+
+/// A trait for the host binary CLI application arguments.
+#[async_trait]
+pub trait HostCliTrait {
+    /// Returns `true` if the host is running in offline mode.
+    fn is_offline(&self) -> bool;
+
+    /// Returns the path of the client binary to execute.
+    fn exec(&self) -> Option<String>;
+
+    /// Returns an instance of a [SharedKeyValueStore], accoring to the CLI arguments.
+    fn construct_kv_store(&self) -> SharedKeyValueStore;
+
+    /// Returns an instance of a [ThreadSafeFetcher], according to the CLI arguments.
+    async fn construct_fetcher(&self) -> Result<Option<ThreadSafeFetcher>>;
+}
 
 /// The host binary CLI application arguments.
 #[derive(Parser, Serialize, Clone, Debug)]
@@ -61,17 +84,22 @@ pub struct HostCli {
     pub server: bool,
 }
 
-impl HostCli {
+#[async_trait]
+impl HostCliTrait for HostCli {
     /// Returns `true` if the host is running in offline mode.
-    pub fn is_offline(&self) -> bool {
+    fn is_offline(&self) -> bool {
         self.l1_node_address.is_none() ||
             self.l2_node_address.is_none() ||
             self.l1_beacon_address.is_none()
     }
 
+    fn exec(&self) -> Option<String> {
+        self.exec.clone()
+    }
+
     /// Parses the CLI arguments and returns a new instance of a [SharedKeyValueStore], as it is
     /// configured to be created.
-    pub fn construct_kv_store(&self) -> SharedKeyValueStore {
+    fn construct_kv_store(&self) -> SharedKeyValueStore {
         let local_kv_store = LocalKeyValueStore::new(self.clone());
 
         let kv_store: SharedKeyValueStore = if let Some(ref data_dir) = self.data_dir {
@@ -85,5 +113,34 @@ impl HostCli {
         };
 
         kv_store
+    }
+
+    /// Parses the CLI arguments and returns a new instance of a [ThreadSafeFetcher].
+    async fn construct_fetcher(&self) -> Result<Option<ThreadSafeFetcher>> {
+        let fetcher: Option<ThreadSafeFetcher> = if !self.is_offline() {
+            let kv_store = self.construct_kv_store();
+            let beacon_client = OnlineBeaconClient::new_http(
+                self.l1_beacon_address.clone().expect("Beacon API URL must be set"),
+            );
+            let mut blob_provider = OnlineBlobProvider::new(beacon_client, None, None);
+            blob_provider
+                .load_configs()
+                .await
+                .map_err(|e| anyhow!("Failed to load blob provider configuration: {e}"))?;
+            let l1_provider =
+                util::http_provider(self.l1_node_address.as_ref().expect("Provider must be set"));
+            let l2_provider =
+                util::http_provider(self.l2_node_address.as_ref().expect("Provider must be set"));
+            Some(Arc::new(RwLock::new(DefaultFetcher::new(
+                kv_store,
+                l1_provider,
+                blob_provider,
+                l2_provider,
+                self.l2_head,
+            ))))
+        } else {
+            None
+        };
+        Ok(fetcher)
     }
 }

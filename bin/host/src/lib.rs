@@ -11,15 +11,14 @@ pub mod server;
 pub mod types;
 pub mod util;
 
-pub use cli::{init_tracing_subscriber, HostCli};
-use fetcher::Fetcher;
+pub use cli::{init_tracing_subscriber, HostCli, HostCliTrait};
+use fetcher::{DefaultFetcher, Fetcher};
 use server::PreimageServer;
 
 use anyhow::{anyhow, Result};
 use command_fds::{CommandFdExt, FdMapping};
 use futures::FutureExt;
 use kona_common::FileDescriptor;
-use kona_derive::online::{OnlineBeaconClient, OnlineBlobProvider};
 use kona_preimage::{HintReader, OracleServer, PipeHandle};
 use kv::KeyValueStore;
 use std::{
@@ -34,7 +33,7 @@ use types::NativePipeFiles;
 
 /// Starts the [PreimageServer] in the primary thread. In this mode, the host program has been
 /// invoked by the Fault Proof VM and the client program is running in the parent process.
-pub async fn start_server(cfg: HostCli) -> Result<()> {
+pub async fn start_server(cfg: impl HostCliTrait) -> Result<()> {
     let (preimage_pipe, hint_pipe) = (
         PipeHandle::new(FileDescriptor::PreimageRead, FileDescriptor::PreimageWrite),
         PipeHandle::new(FileDescriptor::HintRead, FileDescriptor::HintWrite),
@@ -43,28 +42,7 @@ pub async fn start_server(cfg: HostCli) -> Result<()> {
     let hint_reader = HintReader::new(hint_pipe);
 
     let kv_store = cfg.construct_kv_store();
-
-    let fetcher = if !cfg.is_offline() {
-        let beacon_client = OnlineBeaconClient::new_http(
-            cfg.l1_beacon_address.clone().expect("Beacon API URL must be set"),
-        );
-        let mut blob_provider = OnlineBlobProvider::new(beacon_client, None, None);
-        blob_provider
-            .load_configs()
-            .await
-            .map_err(|e| anyhow!("Failed to load blob provider configuration: {e}"))?;
-        let l1_provider = util::http_provider(&cfg.l1_node_address.expect("Provider must be set"));
-        let l2_provider = util::http_provider(&cfg.l2_node_address.expect("Provider must be set"));
-        Some(Arc::new(RwLock::new(Fetcher::new(
-            kv_store.clone(),
-            l1_provider,
-            blob_provider,
-            l2_provider,
-            cfg.l2_head,
-        ))))
-    } else {
-        None
-    };
+    let fetcher = cfg.construct_fetcher().await?;
 
     // Start the server and wait for it to complete.
     info!("Starting preimage server.");
@@ -77,33 +55,12 @@ pub async fn start_server(cfg: HostCli) -> Result<()> {
 
 /// Starts the [PreimageServer] and the client program in separate threads. The client program is
 /// ran natively in this mode.
-pub async fn start_server_and_native_client(cfg: HostCli) -> Result<()> {
+pub async fn start_server_and_native_client(
+    cfg: impl HostCliTrait + Send + Sync + 'static,
+) -> Result<()> {
     let (preimage_pipe, hint_pipe, files) = util::create_native_pipes()?;
     let kv_store = cfg.construct_kv_store();
-
-    let fetcher = if !cfg.is_offline() {
-        let beacon_client = OnlineBeaconClient::new_http(
-            cfg.l1_beacon_address.clone().expect("Beacon API URL must be set"),
-        );
-        let mut blob_provider = OnlineBlobProvider::new(beacon_client, None, None);
-        blob_provider
-            .load_configs()
-            .await
-            .map_err(|e| anyhow!("Failed to load blob provider configuration: {e}"))?;
-        let l1_provider =
-            util::http_provider(cfg.l1_node_address.as_ref().expect("Provider must be set"));
-        let l2_provider =
-            util::http_provider(cfg.l2_node_address.as_ref().expect("Provider must be set"));
-        Some(Arc::new(RwLock::new(Fetcher::new(
-            kv_store.clone(),
-            l1_provider,
-            blob_provider,
-            l2_provider,
-            cfg.l2_head,
-        ))))
-    } else {
-        None
-    };
+    let fetcher = cfg.construct_fetcher().await?;
 
     // Create the server and start it.
     let server_task =
@@ -126,14 +83,15 @@ pub async fn start_server_and_native_client(cfg: HostCli) -> Result<()> {
 
 /// Starts the preimage server in a separate thread. The client program is ran natively in this
 /// mode.
-pub async fn start_native_preimage_server<KV>(
+pub async fn start_native_preimage_server<KV, F>(
     kv_store: Arc<RwLock<KV>>,
-    fetcher: Option<Arc<RwLock<Fetcher<KV>>>>,
+    fetcher: Option<Arc<RwLock<F>>>,
     preimage_pipe: PipeHandle,
     hint_pipe: PipeHandle,
 ) -> Result<()>
 where
     KV: KeyValueStore + Send + Sync + ?Sized + 'static,
+    F: Fetcher + Send + Sync + ?Sized + 'static,
 {
     let oracle_server = OracleServer::new(preimage_pipe);
     let hint_reader = HintReader::new(hint_pipe);
@@ -167,11 +125,15 @@ where
 /// ## Returns
 /// - `Ok(())` if the client program exits successfully.
 /// - `Err(_)` if the client program exits with a non-zero status.
-pub async fn start_native_client_program(cfg: HostCli, files: NativePipeFiles) -> Result<()> {
+pub async fn start_native_client_program(
+    cfg: impl HostCliTrait,
+    files: NativePipeFiles,
+) -> Result<()> {
     // Map the file descriptors to the standard streams and the preimage oracle and hint
     // reader's special file descriptors.
-    let mut command =
-        Command::new(cfg.exec.ok_or_else(|| anyhow!("No client program binary path specified."))?);
+    let mut command = Command::new(
+        cfg.exec().ok_or_else(|| anyhow!("No client program binary path specified."))?,
+    );
     command
         .fd_mappings(vec![
             FdMapping { parent_fd: stdin().as_fd().try_clone_to_owned().unwrap(), child_fd: 0 },

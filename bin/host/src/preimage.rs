@@ -9,17 +9,17 @@ use tokio::sync::RwLock;
 
 /// A [Fetcher]-backed implementation of the [PreimageFetcher] trait.
 #[derive(Debug)]
-pub struct OnlinePreimageFetcher<KV>
+pub struct OnlinePreimageFetcher<F>
 where
-    KV: KeyValueStore + ?Sized,
+    F: Fetcher + ?Sized,
 {
-    inner: Arc<RwLock<Fetcher<KV>>>,
+    inner: Arc<RwLock<F>>,
 }
 
 #[async_trait]
-impl<KV> PreimageFetcher for OnlinePreimageFetcher<KV>
+impl<F> PreimageFetcher for OnlinePreimageFetcher<F>
 where
-    KV: KeyValueStore + Send + Sync + ?Sized,
+    F: Fetcher + Send + Sync + ?Sized,
 {
     async fn get_preimage(&self, key: PreimageKey) -> Result<Vec<u8>> {
         let fetcher = self.inner.read().await;
@@ -27,12 +27,12 @@ where
     }
 }
 
-impl<KV> OnlinePreimageFetcher<KV>
+impl<F> OnlinePreimageFetcher<F>
 where
-    KV: KeyValueStore + ?Sized,
+    F: Fetcher + ?Sized,
 {
     /// Create a new [OnlinePreimageFetcher] from the given [Fetcher].
-    pub fn new(fetcher: Arc<RwLock<Fetcher<KV>>>) -> Self {
+    pub fn new(fetcher: Arc<RwLock<F>>) -> Self {
         Self { inner: fetcher }
     }
 }
@@ -69,17 +69,17 @@ where
 
 /// A [Fetcher]-backed implementation of the [HintRouter] trait.
 #[derive(Debug)]
-pub struct OnlineHintRouter<KV>
+pub struct OnlineHintRouter<F>
 where
-    KV: KeyValueStore + ?Sized,
+    F: Fetcher + ?Sized,
 {
-    inner: Arc<RwLock<Fetcher<KV>>>,
+    inner: Arc<RwLock<F>>,
 }
 
 #[async_trait]
-impl<KV> HintRouter for OnlineHintRouter<KV>
+impl<F> HintRouter for OnlineHintRouter<F>
 where
-    KV: KeyValueStore + Send + Sync + ?Sized,
+    F: Fetcher + Send + Sync + ?Sized,
 {
     async fn route_hint(&self, hint: String) -> Result<()> {
         let mut fetcher = self.inner.write().await;
@@ -88,12 +88,12 @@ where
     }
 }
 
-impl<KV> OnlineHintRouter<KV>
+impl<F> OnlineHintRouter<F>
 where
-    KV: KeyValueStore + ?Sized,
+    F: Fetcher + ?Sized,
 {
     /// Create a new [OnlineHintRouter] from the given [Fetcher].
-    pub fn new(fetcher: Arc<RwLock<Fetcher<KV>>>) -> Self {
+    pub fn new(fetcher: Arc<RwLock<F>>) -> Self {
         Self { inner: fetcher }
     }
 }

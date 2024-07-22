@@ -9,6 +9,7 @@ use alloy_provider::{Provider, ReqwestProvider};
 use alloy_rlp::Decodable;
 use alloy_rpc_types::{Block, BlockNumberOrTag, BlockTransactions, BlockTransactionsKind};
 use anyhow::{anyhow, Result};
+use async_trait::async_trait;
 use kona_client::HintType;
 use kona_derive::{
     online::{OnlineBeaconClient, OnlineBlobProvider, SimpleSlotDerivation},
@@ -21,9 +22,36 @@ use tracing::trace;
 
 mod precompiles;
 
-/// The [Fetcher] struct is responsible for fetching preimages from a remote source.
+/// A type alias for a thread-safe fetcher.
+pub type ThreadSafeFetcher = Arc<RwLock<dyn Fetcher + Send + Sync>>;
+
+/// The [Fetcher] trait is responsible for fetching preimages from a remote source.
+#[async_trait]
+pub trait Fetcher {
+    /// Set the last hint to be received.
+    fn hint(&mut self, hint: &str);
+
+    /// Get the preimage for the given key.
+    async fn get_preimage(&self, key: B256) -> Result<Vec<u8>>;
+}
+
+#[async_trait]
+impl<KV> Fetcher for DefaultFetcher<KV>
+where
+    KV: KeyValueStore + Send + Sync + ?Sized,
+{
+    fn hint(&mut self, hint: &str) {
+        self.hint(hint)
+    }
+
+    async fn get_preimage(&self, key: B256) -> Result<Vec<u8>> {
+        self.get_preimage(key).await
+    }
+}
+
+/// The [DefaultFetcher] struct is a default implementation of the [Fetcher] trait.
 #[derive(Debug)]
-pub struct Fetcher<KV>
+pub struct DefaultFetcher<KV>
 where
     KV: KeyValueStore + ?Sized,
 {
@@ -42,7 +70,7 @@ where
     last_hint: Option<String>,
 }
 
-impl<KV> Fetcher<KV>
+impl<KV> DefaultFetcher<KV>
 where
     KV: KeyValueStore + ?Sized,
 {
@@ -387,7 +415,7 @@ where
                 let header = Header::decode(&mut raw_header.as_ref())
                     .map_err(|e| anyhow!("Failed to decode header: {e}"))?;
 
-                    trace!(target: "fetcher", "got header");
+                trace!(target: "fetcher", "got header");
 
                 // Fetch the storage root for the L2 head block.
                 let l2_to_l1_message_passer = self

@@ -15,11 +15,12 @@ use tokio::sync::RwLock;
 /// The [PreimageServer] is responsible for waiting for incoming preimage requests and
 /// serving them to the client.
 #[derive(Debug)]
-pub struct PreimageServer<P, H, KV>
+pub struct PreimageServer<P, H, KV, F>
 where
     P: PreimageOracleServer,
     H: HintReaderServer,
     KV: KeyValueStore + ?Sized,
+    F: Fetcher + ?Sized,
 {
     /// The oracle server.
     oracle_server: P,
@@ -29,14 +30,15 @@ where
     kv_store: Arc<RwLock<KV>>,
     /// The fetcher for fetching preimages from a remote source. If [None], the server will only
     /// serve preimages that are already in the key-value store.
-    fetcher: Option<Arc<RwLock<Fetcher<KV>>>>,
+    fetcher: Option<Arc<RwLock<F>>>,
 }
 
-impl<P, H, KV> PreimageServer<P, H, KV>
+impl<P, H, KV, F> PreimageServer<P, H, KV, F>
 where
     P: PreimageOracleServer + Send + Sync + 'static,
     H: HintReaderServer + Send + Sync + 'static,
     KV: KeyValueStore + Send + Sync + ?Sized + 'static,
+    F: Fetcher + Send + Sync + ?Sized + 'static,
 {
     /// Create a new [PreimageServer] with the given [PreimageOracleServer],
     /// [HintReaderServer], and [KeyValueStore]. Holds onto the file descriptors for the pipes
@@ -45,7 +47,7 @@ where
         oracle_server: P,
         hint_reader: H,
         kv_store: Arc<RwLock<KV>>,
-        fetcher: Option<Arc<RwLock<Fetcher<KV>>>>,
+        fetcher: Option<Arc<RwLock<F>>>,
     ) -> Self {
         Self { oracle_server, hint_reader, kv_store, fetcher }
     }
@@ -72,7 +74,7 @@ where
     /// client.
     async fn start_oracle_server(
         kv_store: Arc<RwLock<KV>>,
-        fetcher: Option<Arc<RwLock<Fetcher<KV>>>>,
+        fetcher: Option<Arc<RwLock<F>>>,
         oracle_server: P,
     ) {
         #[inline(always)]
@@ -99,7 +101,7 @@ where
 
     /// Starts the hint router, which waits for incoming hints and routes them to the appropriate
     /// handler.
-    async fn start_hint_router(hint_reader: H, fetcher: Option<Arc<RwLock<Fetcher<KV>>>>) {
+    async fn start_hint_router(hint_reader: H, fetcher: Option<Arc<RwLock<F>>>) {
         #[inline(always)]
         async fn do_loop<R, H>(router: &R, server: &H)
         where
