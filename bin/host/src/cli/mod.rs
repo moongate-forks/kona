@@ -117,9 +117,9 @@ pub struct HostCli {
 impl HostCli {
     /// Returns `true` if the host is running in offline mode.
     pub const fn is_offline(&self) -> bool {
-        self.l1_node_address.is_none() &&
-            self.l2_node_address.is_none() &&
-            self.l1_beacon_address.is_none()
+        self.l1_node_address.is_none()
+            && self.l2_node_address.is_none()
+            && self.l1_beacon_address.is_none()
     }
 
     /// Creates the providers associated with the [HostCli] configuration.
@@ -173,6 +173,18 @@ impl HostCli {
 
     /// Reads the [RollupConfig] from the file system and returns it as a string.
     pub fn read_rollup_config(&self) -> Result<RollupConfig> {
+        println!("rollup_config_path: {:?}", self.rollup_config_path);
+        println!("Current directory: {:?}", std::env::current_dir().unwrap());
+        // Canonicalize the path to ensure it's absolute and all components are resolved
+        let canonical_path = std::fs::canonicalize(self.rollup_config_path.as_ref().unwrap())
+            .map_err(|e| anyhow!("Error canonicalizing RollupConfig path: {e}"))?;
+
+        // Update the path with the canonicalized version
+        let path = canonical_path
+            .to_str()
+            .ok_or_else(|| anyhow!("Error converting canonicalized path to string"))?;
+
+        println!("rollup_config_path: {:?}", path);
         let path = self.rollup_config_path.as_ref().ok_or_else(|| {
             anyhow::anyhow!(
                 "No rollup config path provided. Please provide a path to the rollup config."

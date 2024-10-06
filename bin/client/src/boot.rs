@@ -7,6 +7,7 @@ use kona_preimage::{PreimageKey, PreimageOracleClient};
 use op_alloy_genesis::RollupConfig;
 use serde::{Deserialize, Serialize};
 use tracing::warn;
+use tracing::info;
 
 /// The local key ident for the L1 head hash.
 pub const L1_HEAD_KEY: U256 = U256::from_be_slice(&[1]);
@@ -94,6 +95,7 @@ impl BootInfo {
 
         // Attempt to load the rollup config from the chain ID. If there is no config for the chain,
         // fall back to loading the config from the preimage oracle.
+        println!("chain_id: {}", chain_id);
         let rollup_config = if let Some(config) = RollupConfig::from_l2_chain_id(chain_id) {
             config
         } else {

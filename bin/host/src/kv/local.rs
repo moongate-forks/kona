@@ -39,6 +39,7 @@ impl KeyValueStore for LocalKeyValueStore {
             }
             L2_ROLLUP_CONFIG_KEY => {
                 let rollup_config = self.cfg.read_rollup_config().ok()?;
+                println!("rollup_config: {:?}", rollup_config);
                 let serialized = serde_json::to_vec(&rollup_config).ok()?;
                 Some(serialized)
             }
